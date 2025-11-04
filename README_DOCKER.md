@@ -138,15 +138,30 @@ docker run --rm --network godlevel_app-network \
   bash -c "pip install -q -r requirements.txt && python generate_data.py --db-url postgresql://challenge:challenge_2024@postgres:5432/challenge_db"
 ```
 
-#### Option 2: Using Docker Compose (Alternative)
+#### Option 2: Using Docker Compose (Recommended for Container Setup)
 
 Run from the **root directory** where `docker-compose.yml` is located:
 
+**Step 1:** Make sure the database is running:
+```bash
+docker-compose up -d postgres
+```
+
+**Step 2:** Wait for the database to be healthy (about 10-15 seconds), then run the data generator:
 ```bash
 docker-compose --profile tools up data-generator
 ```
 
-**Note:** Make sure the database is running first (`docker-compose up -d postgres` or `docker-compose up`).
+Or build and run in one command:
+```bash
+docker-compose --profile tools up --build data-generator
+```
+
+**Note:** 
+- The `--profile tools` flag is required to run the data-generator service
+- The service will automatically wait for the database to be ready before starting
+- The container will exit when data generation is complete
+- You can view logs with: `docker-compose --profile tools logs data-generator`
 
 #### Option 3: Generate data locally (if Python is installed)
 

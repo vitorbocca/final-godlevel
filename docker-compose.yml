@@ -28,6 +28,11 @@ services:
     container_name: app-data-generator
     environment:
       DATABASE_URL: postgresql://challenge:challenge_2024@postgres:5432/challenge_db
+      DB_HOST: postgres
+      DB_PORT: 5432
+      POSTGRES_DB: challenge_db
+      POSTGRES_USER: challenge
+      POSTGRES_PASSWORD: challenge_2024
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,9 +41,15 @@ services:
     command: >
       sh -c "
         echo 'Waiting for database to be fully ready...' &&
-        sleep 5 &&
-        echo 'Generating challenge data...' &&
-        python generate_data.py --db-url postgresql://challenge:challenge_2024@postgres:5432/challenge_db
+        until pg_isready -h postgres -U challenge -d challenge_db; do
+          echo 'Waiting for database...'
+          sleep 2
+        done &&
+        echo 'Database is ready!' &&
+        sleep 3 &&
+        echo 'Starting data generation...' &&
+        python generate_data.py --db-url postgresql://challenge:challenge_2024@postgres:5432/challenge_db ||
+        (echo 'Data generation failed!' && exit 1)
       "
     restart: "no"
     profiles:
