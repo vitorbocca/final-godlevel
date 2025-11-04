@@ -1,0 +1,113 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: app-db
+    environment:
+      POSTGRES_DB: challenge_db
+      POSTGRES_USER: challenge
+      POSTGRES_PASSWORD: challenge_2024
+    ports:
+      - "5433:5432"
+    volumes:
+      - app_postgres_data:/var/lib/postgresql/data
+      - ./nola-godlevel-backend/database-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U challenge -d challenge_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # Data Generator (runs separately with --profile tools)
+  data-generator:
+    build:
+      context: ./nola-godlevel-backend
+      dockerfile: Dockerfile.data-generator
+    container_name: app-data-generator
+    environment:
+      DATABASE_URL: postgresql://challenge:challenge_2024@postgres:5432/challenge_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+    command: >
+      sh -c "
+        echo 'Waiting for database to be fully ready...' &&
+        sleep 5 &&
+        echo 'Generating challenge data...' &&
+        python generate_data.py --db-url postgresql://challenge:challenge_2024@postgres:5432/challenge_db
+      "
+    restart: "no"
+    profiles:
+      - tools
+
+  # pgAdmin (runs separately with --profile tools)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: app-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@godlevel.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+    profiles:
+      - tools
+
+  # Backend API
+  backend:
+    build:
+      context: ./nola-godlevel-backend
+      dockerfile: Dockerfile
+    container_name: app-backend
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      POSTGRES_DB: challenge_db
+      POSTGRES_USER: challenge
+      POSTGRES_PASSWORD: challenge_2024
+      DB_NAME: challenge_db
+      DB_USER: challenge
+      DB_PASSWORD: challenge_2024
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./nola-godlevel-frontend
+      dockerfile: Dockerfile
+    container_name: app-frontend
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:3000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+    restart: unless-stopped
+
+volumes:
+  app_postgres_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
+
